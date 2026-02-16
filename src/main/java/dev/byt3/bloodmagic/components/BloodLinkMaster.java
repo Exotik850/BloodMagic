@@ -1,43 +1,50 @@
 package dev.byt3.bloodmagic.components;
 
-import com.hypixel.hytale.component.Component;
-import com.hypixel.hytale.component.ComponentType;
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.codec.codecs.array.ArrayCodec;
+import com.hypixel.hytale.component.*;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public class BloodLinkMaster implements Component<EntityStore> {
-    Ref<EntityStore> masterEntity; // The entity that is the master of this link
-    Set<Ref<EntityStore>> linkedEntities; // Set of entities linked to this master
-    @Nullable
-    Store<EntityStore> store;
+    public static final BuilderCodec<BloodLinkMaster> CODEC = BuilderCodec.builder(BloodLinkMaster.class, BloodLinkMaster::new)
+            .append(new KeyedCodec<>("Owner", Codec.UUID_BINARY), (master, owner) -> master.masterEntity = owner, (master) -> master.masterEntity)
+            .add()
+            .append(new KeyedCodec<>("LinkedEntities", new ArrayCodec<>(Codec.UUID_BINARY, UUID[]::new)),
+                    (master, linkedEntities) -> {
+                        master.linkedEntities.clear();
+                        master.linkedEntities.addAll(List.of(linkedEntities));
+                    },
+                    master -> master.linkedEntities.toArray(UUID[]::new))
+            .add()
+            .build();
 
-    public BloodLinkMaster(Ref<EntityStore> masterEntity, Set<Ref<EntityStore>> linkedEntities) {
+    private UUID masterEntity; // The entity that is the master of this link
+    private Set<UUID> linkedEntities; // Set of entities linked to this master
+
+    private BloodLinkMaster() {}
+
+    public BloodLinkMaster(UUID masterEntity, Set<UUID> linkedEntities) {
         this.linkedEntities = linkedEntities;
         this.masterEntity = masterEntity;
     }
 
-    public void addLinkedEntity(Ref<EntityStore> entity) {
-        getStore().putComponent(entity, BloodLink.getComponentType(), new BloodLink(masterEntity));
-        linkedEntities.add(entity);
-    }
-
-    @Nonnull
-    public Store<EntityStore> getStore() {
-        if (store == null && linkedEntities.isEmpty()) {
-            throw new IllegalStateException("BloodLinkMaster has no linked entities to derive store from.");
+    public void addLinkedEntity(Ref<EntityStore> entity, ComponentAccessor<EntityStore> store) {
+        UUIDComponent uuidComponent = entity.getStore().getComponent(entity, UUIDComponent.getComponentType());
+        if (uuidComponent == null) {
+            throw new IllegalStateException("Entity does not have a UUIDComponent, cannot link to BloodLinkMaster.");
         }
-        if (store == null) {
-            // Assuming all linked entities share the same store, we can take the first one
-            Ref<EntityStore> firstLinkedEntity = linkedEntities.iterator().next();
-            store = firstLinkedEntity.getStore();
-        }
-        return store;
+        store.putComponent(entity, BloodLink.getComponentType(), new BloodLink(masterEntity));
+        linkedEntities.add(uuidComponent.getUuid());
     }
 
     public static ComponentType<EntityStore, BloodLinkMaster> getComponentType() {

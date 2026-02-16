@@ -2,11 +2,13 @@ package dev.byt3.bloodmagic;
 
 import com.hypixel.hytale.component.ComponentType;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.components.BloodLink;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
+import dev.byt3.bloodmagic.interactions.ActivateBloodLinkInteraction;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 public class BloodMagicPlugin extends JavaPlugin {
@@ -29,6 +31,8 @@ public class BloodMagicPlugin extends JavaPlugin {
     protected void setup() {
         LOGGER.atInfo().log("Starting Blood Magic plugin setup...");
         bloodLinkComponentType = this.getEntityStoreRegistry().registerComponent(BloodLink.class, "BloodLink", BloodLink.CODEC);
+        bloodLinkMasterComponentType = this.getEntityStoreRegistry().registerComponent(BloodLinkMaster.class, "BloodLinkMaster", BloodLinkMaster.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("ActivateBloodLink", ActivateBloodLinkInteraction.class, ActivateBloodLinkInteraction.CODEC);
     }
 
 }
