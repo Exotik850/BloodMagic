@@ -15,7 +15,7 @@ import java.util.UUID;
 
 public class BloodLink implements Component<EntityStore> {
     public static BuilderCodec<BloodLink> CODEC = BuilderCodec.builder(BloodLink.class, BloodLink::new)
-            .append(new KeyedCodec<>("LinkedEntity", Codec.UUID_STRING), (link, linkedEntity) -> link.linkedEntity = linkedEntity, (link) -> link.linkedEntity)
+            .append(new KeyedCodec<>("LinkedEntity", Codec.UUID_BINARY), (link, linkedEntity) -> link.linkedEntity = linkedEntity, (link) -> link.linkedEntity)
             .add()
             .build();
 
