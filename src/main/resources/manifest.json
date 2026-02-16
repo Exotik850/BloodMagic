@@ -1,13 +1,11 @@
 {
-    "Group": "HytaleModding",
-    "Name": "ExamplePlugin",
-    "Version": "0.0.0",
-    "Description": "Description of your plugin",
+    "Group": "Exotik850",
+    "Name": "[Exotik's] Blood Magic",
+    "Version": "0.1.0",
+    "Description": "Adds a magical system based on blood and rituals.",
     "Authors": [
         {
-            "Name": "Your Name",
-            "Email": "your.email@example.com",
-            "Url": "https://your-website.com"
+            "Name": "Exotik850"
         }
     ],
     "Website": "https://your-plugin-website.com",
@@ -16,5 +14,5 @@
     "Dependencies": {},
     "OptionalDependencies": {},
     "ServerVersion": "*",
-    "Main": "dev.hytalemodding.ExamplePlugin"
+    "Main": "dev.byt3.bloodmagic.BloodMagicPlugin"
 }

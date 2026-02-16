@@ -1,4 +1,6 @@
-rootProject.name = "dev.hytalemodding"
+import dev.scaffoldit.hytale.wire.HytaleManifest
+
+rootProject.name = "BloodMagic"
 
 plugins {
     // See documentation on https://scaffoldit.dev
@@ -21,8 +23,13 @@ hytale {
     }
 
     manifest {
-        Group = "HytaleModding"
-        Name = "ExamplePlugin"
-        Main = "dev.hytalemodding.ExamplePlugin"
+        Group = "Exotik850"
+        Name = "[Exotik's] Blood Magic"
+        Main = "dev.byt3.bloodmagic.BloodMagicPlugin"
+        Description = "Adds a magical system based on blood and rituals."
+        Version = "0.1.0"
+        Authors = listOf(
+            HytaleManifest.Author("Exotik850")
+        )
     }
 }
