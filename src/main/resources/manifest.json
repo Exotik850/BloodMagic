@@ -12,7 +12,9 @@
     "DisabledByDefault": false,
     "IncludesAssetPack": false,
     "Dependencies": {
-        "Hytale:DamageModule": "*"
+        "Hytale:DamageModule": "*",
+        "Hytale:EntityStatsModule": "*",
+        "Hytale:AssetModule": "*"
     },
     "OptionalDependencies": {},
     "ServerVersion": "*",

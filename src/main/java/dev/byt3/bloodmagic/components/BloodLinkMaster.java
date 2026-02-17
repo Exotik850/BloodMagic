@@ -14,12 +14,9 @@ import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
-import com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType;
-import com.hypixel.hytale.server.core.modules.entitystats.modifier.Modifier;
-import com.hypixel.hytale.server.core.modules.entitystats.modifier.StaticModifier;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import dev.byt3.bloodmagic.codec.BloodLinkSource;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
+import dev.byt3.bloodmagic.codec.BloodLinkSource;
 import it.unimi.dsi.fastutil.Pair;
 
 import javax.annotation.Nullable;
@@ -40,12 +37,23 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     private UUID masterEntity; // The entity that is the master of this link
     private Set<UUID> linkedEntities = new HashSet<>(); // Set of entities linked to this master
-    private List<Pair<EntityStatMap, Ref<EntityStore>>> cachedLinkedRefs = new ArrayList<>(); // Cached refs of linked entities for quick access
+    private final List<Pair<EntityStatMap, Ref<EntityStore>>> cachedLinkedRefs = new ArrayList<>(); // Cached refs of linked entities for quick access
 
     @Nullable
     private Ref<EntityStore> entityRef;
 
     private BloodLinkMaster() {
+    }
+
+    public void clearLinks(ComponentAccessor<EntityStore> store) {
+        for (UUID linkedEntity : linkedEntities) {
+            Ref<EntityStore> entityRef = store.getExternalData().getRefFromUUID(linkedEntity);
+            if (entityRef != null) {
+                store.removeComponent(entityRef, BloodLink.getComponentType());
+            }
+        }
+        linkedEntities.clear();
+        cachedLinkedRefs.clear();
     }
 
     private Ref<EntityStore> getRef(ComponentAccessor<EntityStore> store) {
@@ -62,28 +70,30 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     public void addLinkedEntity(Ref<EntityStore> entity, ComponentAccessor<EntityStore> store) {
         UUIDComponent uuidComponent = store.getComponent(entity, UUIDComponent.getComponentType());
-        EntityStatMap statMap = store.getComponent(entity, EntityStatMap.getComponentType());
-        EntityStatMap masterMap = store.getComponent(getRef(store), EntityStatMap.getComponentType());
-        if (uuidComponent == null || statMap == null || masterMap == null) {
-            HytaleLogger.getLogger().atWarning().log("Tried to link entity with No UUID or StatMap: " + entity.getIndex());
-            return;
-        }
-
-        EntityStatValue healthValue = statMap.get(DefaultEntityStatTypes.getHealth());
-        if (healthValue == null) {
-            HytaleLogger.getLogger().atWarning().log("Tried to link entity with No Health stat: " + entity.getIndex());
-            return;
-        }
-
-        int bloodManaIdx = EntityStatType.getAssetMap().getIndex("BloodMana");
-        Modifier linkedModifer = new StaticModifier(Modifier.ModifierTarget.MAX, StaticModifier.CalculationType.ADDITIVE, healthValue.get());
-        masterMap.putModifier(bloodManaIdx, uuidComponent.getUuid().toString(), linkedModifer);
-        masterMap.addStatValue(bloodManaIdx, healthValue.get());
-
         store.putComponent(entity, BloodLink.getComponentType(), new BloodLink(masterEntity));
         linkedEntities.add(uuidComponent.getUuid());
-
         HytaleLogger.getLogger().atInfo().log("Linked entity " + entity.getIndex() + " to master " + getRef(store).getIndex());
+        if (!cachedLinkedRefs.isEmpty()) {
+            cachedLinkedRefs.add(Pair.of(store.getComponent(entity, EntityStatMap.getComponentType()), entity));
+        }
+    }
+
+    public boolean isCacheValid(ComponentAccessor<EntityStore> store) {
+        return cachedLinkedRefs.size() == linkedEntities.size() && cachedLinkedRefs.stream().allMatch(pair -> {
+            UUIDComponent uuidComponent = store.getComponent(pair.right(), UUIDComponent.getComponentType());
+            return uuidComponent != null && linkedEntities.contains(uuidComponent.getUuid());
+        });
+    }
+
+    public float getTotalLinkedHealth() {
+        float totalHealth = 0;
+        for (var pair : cachedLinkedRefs) {
+            EntityStatValue healthValue = pair.left().get(DefaultEntityStatTypes.getHealth());
+            if (healthValue != null) {
+                totalHealth += healthValue.get();
+            }
+        }
+        return totalHealth;
     }
 
     public static ComponentType<EntityStore, BloodLinkMaster> getComponentType() {
@@ -98,23 +108,17 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     public void removeEntity(Ref<EntityStore> target, ComponentAccessor<EntityStore> store) {
         UUIDComponent uuidComponent = store.getComponent(target, UUIDComponent.getComponentType());
-        EntityStatMap statMap = store.getComponent(target, EntityStatMap.getComponentType());
-        EntityStatMap masterMap = store.getComponent(getRef(store), EntityStatMap.getComponentType());
-        if (uuidComponent == null || statMap == null || masterMap == null) {
-            HytaleLogger.getLogger().atWarning().log("Tried to unlink entity with No UUID or StatMap: " + target.getIndex());
-            return;
-        }
 
         if (!linkedEntities.contains(uuidComponent.getUuid())) {
             HytaleLogger.getLogger().atWarning().log("Tried to unlink entity that is not linked: " + target.getIndex());
             return;
         }
 
-        int bloodManaIdx = EntityStatType.getAssetMap().getIndex("BloodMana");
-        masterMap.removeModifier(bloodManaIdx, uuidComponent.getUuid().toString());
-
         store.removeComponent(target, BloodLink.getComponentType());
         linkedEntities.remove(uuidComponent.getUuid());
+        if (!cachedLinkedRefs.isEmpty()) {
+            cachedLinkedRefs.removeIf(pair -> pair.right().equals(target));
+        }
 
         HytaleLogger.getLogger().atInfo().log("Unlinked entity " + target.getIndex() + " from master " + getRef(store).getIndex());
     }
@@ -156,26 +160,10 @@ public class BloodLinkMaster implements Component<EntityStore> {
             totalHealth += masterHealthValue.get();
         }
 
-        EntityStore entityStore = store.getExternalData();
-        Set<UUID> toRemove = new HashSet<>();
-
-        for (UUID linkedEntity : linkedEntities) {
-            Ref<EntityStore> entityRef = entityStore.getRefFromUUID(linkedEntity);
-            if (entityRef == null) {
-                HytaleLogger.getLogger().atWarning().log("Linked entity with UUID " + linkedEntity + " not found, skipping damage application.");
-                toRemove.add(linkedEntity);
-                continue;
-            }
-            EntityStatMap statMap = store.getComponent(entityRef, EntityStatMap.getComponentType());
-            if (statMap == null) continue;
-            EntityStatValue healthValue = statMap.get(DefaultEntityStatTypes.getHealth());
+        for (var pair : cachedLinkedRefs) {
+            EntityStatValue healthValue = pair.left().get(DefaultEntityStatTypes.getHealth());
             if (healthValue == null) continue;
             totalHealth += healthValue.get();
-            cachedLinkedRefs.add(Pair.of(statMap, entityRef));
-        }
-
-        for (UUID remove : toRemove) {
-            linkedEntities.remove(remove);
         }
 
         if (totalHealth <= 0) {
@@ -209,7 +197,26 @@ public class BloodLinkMaster implements Component<EntityStore> {
             store.invoke(getRef(store), masterDamage);
             HytaleLogger.getLogger().atInfo().log("Applying %f damage to master entity %d (Health: %f, Percent: %f%%)", masterDamageToApply, getRef(store).getIndex(), masterHealthValue.get(), masterHealthPercent * 100);
         }
+    }
 
+    public void revalidateCache(ComponentAccessor<EntityStore> store, boolean includeMaster) {
         cachedLinkedRefs.clear();
+        for (UUID linkedEntity : linkedEntities) {
+            Ref<EntityStore> entityRef = store.getExternalData().getRefFromUUID(linkedEntity);
+            if (entityRef == null) {
+                HytaleLogger.getLogger().atWarning().log("Linked entity with UUID " + linkedEntity + " not found, skipping damage application.");
+                continue;
+            }
+            EntityStatMap statMap = store.getComponent(entityRef, EntityStatMap.getComponentType());
+            if (statMap == null) continue;
+            cachedLinkedRefs.add(Pair.of(statMap, entityRef));
+        }
+
+        if (includeMaster) {
+            EntityStatMap masterStatMap = store.getComponent(getRef(store), EntityStatMap.getComponentType());
+            if (masterStatMap != null) {
+                cachedLinkedRefs.add(Pair.of(masterStatMap, getRef(store)));
+            }
+        }
     }
 }

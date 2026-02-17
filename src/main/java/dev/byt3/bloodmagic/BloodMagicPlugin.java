@@ -7,6 +7,7 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
+import com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
@@ -15,6 +16,7 @@ import dev.byt3.bloodmagic.components.BloodLink;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
 import dev.byt3.bloodmagic.interactions.ActivateBloodLinkInteraction;
 import dev.byt3.bloodmagic.systems.BloodLinkDamageSystem;
+import dev.byt3.bloodmagic.systems.BloodManaSystems;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 public class BloodMagicPlugin extends JavaPlugin {
@@ -48,7 +50,11 @@ public class BloodMagicPlugin extends JavaPlugin {
         bloodLinkComponentType = this.getEntityStoreRegistry().registerComponent(BloodLink.class, "BloodLink", BloodLink.CODEC);
         bloodLinkMasterComponentType = this.getEntityStoreRegistry().registerComponent(BloodLinkMaster.class, "BloodLinkMaster", BloodLinkMaster.CODEC);
         this.getEntityStoreRegistry().registerSystem(new BloodLinkDamageSystem());
+        BloodManaSystems.registerSystems(this);
         this.getCodecRegistry(Interaction.CODEC).register("ActivateBloodLink", ActivateBloodLinkInteraction.class, ActivateBloodLinkInteraction.CODEC);
+        if (EntityStatType.getAssetMap().getIndex("BloodMana") == Integer.MAX_VALUE) {
+            LOGGER.atSevere().log("BloodMana stat not found in asset map! Blood Magic will not function correctly.");
+        }
     }
 
 }
