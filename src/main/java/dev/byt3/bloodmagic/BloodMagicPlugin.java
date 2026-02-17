@@ -12,6 +12,8 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Int
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.util.Config;
+import dev.byt3.bloodmagic.codec.BloodMagicConfig;
 import dev.byt3.bloodmagic.components.BloodLink;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
 import dev.byt3.bloodmagic.interactions.ActivateBloodLinkInteraction;
@@ -25,6 +27,7 @@ public class BloodMagicPlugin extends JavaPlugin {
     public ComponentType<EntityStore, BloodLinkMaster> bloodLinkMasterComponentType;
 
     static BloodMagicPlugin instance;
+    public Config<BloodMagicConfig> config = this.withConfig("BloodMagicConfig", BloodMagicConfig.CODEC);
 
     public BloodMagicPlugin(@NonNullDecl JavaPluginInit init) {
         super(init);
@@ -55,6 +58,7 @@ public class BloodMagicPlugin extends JavaPlugin {
         if (EntityStatType.getAssetMap().getIndex("BloodMana") == Integer.MAX_VALUE) {
             LOGGER.atSevere().log("BloodMana stat not found in asset map! Blood Magic will not function correctly.");
         }
+        config.save();
     }
 
 }
