@@ -1,0 +1,47 @@
+{
+  "Type": "Condition",
+  "Crouching": true,
+  "Next": {
+    "Type": "Parallel",
+    "Interactions": [
+      {
+        "Interactions": [
+          {
+            "Type": "ClearEntityEffect",
+            "EntityEffectId": "BloodLinked",
+            "Entity": "Target"
+          }
+        ]
+      },
+      {
+        "Interactions": [
+          {
+            "Type": "ActivateBloodLink",
+            "Unlink": true
+          }
+        ]
+      }
+    ]
+  },
+  "Failed": {
+    "Type": "Parallel",
+    "Interactions": [
+      {
+        "Interactions": [
+          {
+            "Type": "ActivateBloodLink"
+          }
+        ]
+      },
+      {
+        "Interactions": [
+          {
+            "Type": "ApplyEffect",
+            "EffectId": "BloodLinked",
+            "Entity": "Target"
+          }
+        ]
+      }
+    ]
+  }
+}

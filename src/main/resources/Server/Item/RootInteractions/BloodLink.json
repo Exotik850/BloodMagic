@@ -1,0 +1,10 @@
+{
+  "Interactions": [
+    "BloodLink",
+    {
+      "Type": "ApplyEffect",
+      "EffectId": "BloodLinked",
+      "Entity": "Target"
+    }
+  ]
+}

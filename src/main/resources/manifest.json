@@ -11,7 +11,9 @@
     "Website": "https://your-plugin-website.com",
     "DisabledByDefault": false,
     "IncludesAssetPack": false,
-    "Dependencies": {},
+    "Dependencies": {
+        "Hytale:DamageModule": "*"
+    },
     "OptionalDependencies": {},
     "ServerVersion": "*",
     "Main": "dev.byt3.bloodmagic.BloodMagicPlugin"

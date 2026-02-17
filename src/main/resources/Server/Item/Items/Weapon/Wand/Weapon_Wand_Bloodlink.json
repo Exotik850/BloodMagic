@@ -44,12 +44,6 @@
   "Weapon": {},
   "ItemSoundSetId": "ISS_Weapons_Wand",
   "Interactions": {
-    "Primary": {
-      "Interactions": [
-        {
-          "Type": "ActivateBloodLink"
-        }
-      ]
-    }
+    "Primary": "BloodLink"
   }
 }

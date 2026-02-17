@@ -36,4 +36,8 @@ public class BloodLink implements Component<EntityStore> {
     public Component<EntityStore> clone() {
         return new BloodLink(this.linkedEntity);
     }
+
+    public UUID getMasterUUID() {
+        return linkedEntity;
+    }
 }

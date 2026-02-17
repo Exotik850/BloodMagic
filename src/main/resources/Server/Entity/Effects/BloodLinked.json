@@ -1,0 +1,8 @@
+{
+  "ApplicationEffects": {
+    "EntityBottomTint": "#872323",
+    "EntityTopTint": "#872323",
+    "ModelVFXId": "Stoneskin"
+  },
+  "Infinite": true
+}
