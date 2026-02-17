@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHa
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInstantInteraction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
+import dev.byt3.bloodmagic.codec.BloodMagicConfig;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
@@ -33,6 +34,9 @@ public class ActivateBloodLinkInteraction extends SimpleInstantInteraction {
     protected void firstRun(@NonNullDecl InteractionType interactionType, @NonNullDecl InteractionContext ctx, @NonNullDecl CooldownHandler cooldownHandler) {
         Ref<EntityStore> master = ctx.getOwningEntity();
         ComponentAccessor<EntityStore> store = ctx.getCommandBuffer();
+
+        BloodMagicConfig config = BloodMagicPlugin.get().config.get();
+
         if (store == null) {
             HytaleLogger.getLogger().atWarning().log("ActivateBloodLinkInteraction: No component store available for interaction.");
             return;
@@ -42,6 +46,24 @@ public class ActivateBloodLinkInteraction extends SimpleInstantInteraction {
             HytaleLogger.getLogger().atWarning().log("ActivateBloodLinkInteraction: No target entity found for interaction.");
             return;
         }
+
+        // Check Entity Type Limits
+        // TODO: Get entity type string to check against blacklist/whitelist
+        // String entityType = ???;
+        // if (config.whitelistedEntityTypes.size() > 0 && !config.whitelistedEntityTypes.contains(entityType)) { return; }
+        // if (config.blacklistedEntityTypes.contains(entityType)) { return; }
+
+        if (!config.canLinkPlayers) {
+            if (store.getComponent(targetEntity, Player.getComponentType()) != null) {
+                HytaleLogger.getLogger().atInfo().log("ActivateBloodLinkInteraction: Target entity is a player and player linking is disabled.");
+                return;
+            }
+        }
+
+        // TODO: Check if target is a boss and config.canLinkBosses is false
+
+        // TODO: Check teams and config.allowCrossTeamLinking
+
         if (BloodMagicPlugin.isPlayerInCreative(targetEntity, store)) {
             HytaleLogger.getLogger().atInfo().log("ActivateBloodLinkInteraction: Target entity is a player in creative mode, skipping link.");
             return;
@@ -64,6 +86,11 @@ public class ActivateBloodLinkInteraction extends SimpleInstantInteraction {
         if (unlink) {
             masterComponent.removeEntity(targetEntity, store);
         } else {
+             // Check max links
+            if (config.maxLinkedEntities != -1 && masterComponent.getLinkedEntities().size() >= config.maxLinkedEntities) {
+                 HytaleLogger.getLogger().atInfo().log("ActivateBloodLinkInteraction: Master has reached max linked entities.");
+                 return;
+            }
             masterComponent.addLinkedEntity(targetEntity, store);
         }
     }

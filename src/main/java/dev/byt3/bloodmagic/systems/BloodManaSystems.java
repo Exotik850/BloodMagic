@@ -9,6 +9,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
+import dev.byt3.bloodmagic.codec.BloodMagicConfig;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
 
 import javax.annotation.Nonnull;
@@ -58,10 +59,15 @@ public class BloodManaSystems {
             tickTimer = 0f;
             BloodLinkMaster master = archetypeChunk.getComponent(i, BloodLinkMaster.getComponentType());
             if (master == null) return;
+
+            BloodMagicConfig config = BloodMagicPlugin.get().config.get();
+
             if (!master.isCacheValid(commandBuffer)) {
                 boolean isPlayerInCreative = BloodMagicPlugin.isPlayerInCreative(archetypeChunk.getReferenceTo(i), commandBuffer);
                 master.revalidateCache(commandBuffer, !isPlayerInCreative);
             }
+
+            // TODO Check distances and unlink if necessary based on config.maxLinkDistance
         }
 
         @Nullable
@@ -72,4 +78,3 @@ public class BloodManaSystems {
     }
 
 }
-

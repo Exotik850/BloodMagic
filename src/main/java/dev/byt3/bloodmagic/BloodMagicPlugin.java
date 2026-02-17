@@ -18,6 +18,7 @@ import dev.byt3.bloodmagic.components.BloodLink;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
 import dev.byt3.bloodmagic.interactions.ActivateBloodLinkInteraction;
 import dev.byt3.bloodmagic.systems.BloodLinkDamageSystem;
+import dev.byt3.bloodmagic.systems.BloodLinkDeathSystem;
 import dev.byt3.bloodmagic.systems.BloodManaSystems;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
@@ -50,9 +51,14 @@ public class BloodMagicPlugin extends JavaPlugin {
     @Override
     protected void setup() {
         LOGGER.atInfo().log("Starting Blood Magic plugin setup...");
+        BloodMagicConfig configInstance = config.get();
         bloodLinkComponentType = this.getEntityStoreRegistry().registerComponent(BloodLink.class, "BloodLink", BloodLink.CODEC);
         bloodLinkMasterComponentType = this.getEntityStoreRegistry().registerComponent(BloodLinkMaster.class, "BloodLinkMaster", BloodLinkMaster.CODEC);
         this.getEntityStoreRegistry().registerSystem(new BloodLinkDamageSystem());
+        if (configInstance.killLinkedEntities || configInstance.killMasterOnLinkedEntityDeath) {
+            LOGGER.atInfo().log("Registering BloodLinkDeathSystem due to config settings...");
+            this.getEntityStoreRegistry().registerSystem(new BloodLinkDeathSystem());
+        }
         BloodManaSystems.registerSystems(this);
         this.getCodecRegistry(Interaction.CODEC).register("ActivateBloodLink", ActivateBloodLinkInteraction.class, ActivateBloodLinkInteraction.CODEC);
         if (EntityStatType.getAssetMap().getIndex("BloodMana") == Integer.MAX_VALUE) {

@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.codec.BloodLinkSource;
+import dev.byt3.bloodmagic.codec.BloodMagicConfig;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
 import dev.byt3.bloodmagic.components.BloodLink;
 import dev.byt3.bloodmagic.components.BloodLinkMaster;
@@ -31,6 +32,8 @@ public class BloodLinkDamageSystem extends DamageEventSystem {
             return;
         }
 
+        BloodMagicConfig config = BloodMagicPlugin.get().config.get();
+
         BloodLinkMaster master = archetypeChunk.getComponent(i, BloodLinkMaster.getComponentType());
         boolean playerInCreative;
         if (master != null) {
@@ -45,6 +48,12 @@ public class BloodLinkDamageSystem extends DamageEventSystem {
         if (link == null) {
             // Entity matched the query but has neither component (shouldn't happen)
             return;
+        }
+
+        if (config.onlySplitWhenMasterDamaged) {
+             // If configured to only split when master is damaged, we do nothing here.
+             // The linked entity will take the full damage normally.
+             return;
         }
 
         // The damaged entity is a linked entity — find the master and split damage

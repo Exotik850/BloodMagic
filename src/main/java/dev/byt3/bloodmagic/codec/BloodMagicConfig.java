@@ -5,6 +5,7 @@ import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.codec.codecs.EnumCodec;
 import com.hypixel.hytale.codec.validation.validator.ArrayValidator;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.npc.validators.NPCRoleValidator;
 
 import java.util.HashSet;
@@ -46,6 +47,7 @@ public class BloodMagicConfig {
                         config.blacklistedDamageTypes.addAll(List.of(list));
                     },
                     config -> config.blacklistedDamageTypes.toArray(String[]::new))
+            .addValidatorLate(() -> DamageCause.VALIDATOR_CACHE.getArrayValidator().late())
             .documentation("List of damage type names that should NOT be split across the network (e.g., 'fall', 'drown', 'void').")
             .add()
 
@@ -60,11 +62,6 @@ public class BloodMagicConfig {
                     config -> config.maxLinkDistance)
             .documentation("Maximum distance (in blocks) between master and linked entities. Entities beyond this range may be auto-unlinked. Set to -1 for unlimited range.")
             .add()
-            .append(new KeyedCodec<>("BreakLinkOnDistanceExceeded", Codec.BOOLEAN),
-                    (config, value) -> config.breakLinkOnDistanceExceeded = value,
-                    config -> config.breakLinkOnDistanceExceeded)
-            .documentation("If true, links will automatically break when entities exceed MaxLinkDistance. If false, damage simply won't be shared until they're back in range.")
-            .add()
             .append(new KeyedCodec<>("RequireLineOfSight", Codec.BOOLEAN),
                     (config, value) -> config.requireLineOfSight = value,
                     config -> config.requireLineOfSight)
@@ -72,23 +69,24 @@ public class BloodMagicConfig {
             .add()
 
             // ==================== ENTITY RESTRICTIONS ====================
-            .append(new KeyedCodec<>("BlacklistedEntityTypes", Codec.STRING_ARRAY),
+            .append(new KeyedCodec<>("BlacklistedNPCRoles", Codec.STRING_ARRAY),
                     (config, list) -> {
-                        config.blacklistedEntityTypes.clear();
-                        config.blacklistedEntityTypes.addAll(List.of(list));
+                        config.blacklistedNPCRoles.clear();
+                        config.blacklistedNPCRoles.addAll(List.of(list));
                     },
-                    config -> config.blacklistedEntityTypes.toArray(String[]::new)
+                    config -> config.blacklistedNPCRoles.toArray(String[]::new)
             )
             .documentation("List of entity groups (by name) that should be excluded from being able to link.")
             .addValidatorLate(() -> new ArrayValidator<>(NPCRoleValidator.INSTANCE).late())
             .add()
-            .append(new KeyedCodec<>("WhitelistedEntityTypes", Codec.STRING_ARRAY),
+            .append(new KeyedCodec<>("WhitelistedNPCRoles", Codec.STRING_ARRAY),
                     (config, list) -> {
-                        config.whitelistedEntityTypes.clear();
-                        config.whitelistedEntityTypes.addAll(List.of(list));
+                        config.whitelistedNPCRoles.clear();
+                        config.whitelistedNPCRoles.addAll(List.of(list));
                     },
-                    config -> config.whitelistedEntityTypes.toArray(String[]::new))
+                    config -> config.whitelistedNPCRoles.toArray(String[]::new))
             .documentation("If non-empty, ONLY these entity types can be linked. Takes priority over blacklist.")
+            .addValidatorLate(() -> new ArrayValidator<>(NPCRoleValidator.INSTANCE).late())
             .add()
             .append(new KeyedCodec<>("CanLinkPlayers", Codec.BOOLEAN),
                     (config, value) -> config.canLinkPlayers = value,
@@ -126,6 +124,11 @@ public class BloodMagicConfig {
                     (config, value) -> config.preventLethalDamageToLinked = value,
                     config -> config.preventLethalDamageToLinked)
             .documentation("If true, linked entities cannot die from split damage - they'll be left at 1 HP instead. Only the master can die from split damage.")
+            .add()
+            .append(new KeyedCodec<>("KillMasterOnChildDeath", Codec.BOOLEAN),
+                    (config, value) -> config.killMasterOnLinkedEntityDeath = value,
+                    config -> config.killMasterOnLinkedEntityDeath)
+            .documentation("If true, the master entity will be killed when any linked entity dies.")
             .add()
             .append(new KeyedCodec<>("LinkDurationSeconds", Codec.DOUBLE),
                     (config, value) -> config.linkDurationSeconds = value,
@@ -189,24 +192,24 @@ public class BloodMagicConfig {
     public Set<String> blacklistedDamageTypes = new HashSet<>();
 
     // ==================== LINKING LIMITS ====================
-    public Integer maxLinkedEntities;
-    public Double maxLinkDistance;
-    public boolean breakLinkOnDistanceExceeded = false;
+    public Integer maxLinkedEntities = -1;
+    public Double maxLinkDistance = null;
     public boolean requireLineOfSight = false;
 
     // ==================== ENTITY RESTRICTIONS ====================
-    public Set<String> blacklistedEntityTypes = new HashSet<>();
-    public Set<String> whitelistedEntityTypes = new HashSet<>();
+    public Set<String> blacklistedNPCRoles = new HashSet<>();
+    public Set<String> whitelistedNPCRoles = new HashSet<>();
     public boolean canLinkPlayers = false;
     public boolean canLinkBosses = false;
     public boolean allowCrossTeamLinking = true;
 
     // ==================== DEATH & LIFECYCLE ====================
     public boolean killLinkedEntities = false;
+    public boolean killMasterOnLinkedEntityDeath = false;
     public boolean unlinkOnMasterDying = true;
     public boolean transferMasterOnDeath = false;
     public boolean preventLethalDamageToLinked = false;
-    public Double linkDurationSeconds;
+    public Double linkDurationSeconds = -1.0;
 
     // ==================== HEALING & REGENERATION ====================
     public boolean shareHealing = false;

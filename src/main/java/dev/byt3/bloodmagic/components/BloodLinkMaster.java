@@ -4,19 +4,19 @@ import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.codec.codecs.array.ArrayCodec;
-import com.hypixel.hytale.component.Component;
-import com.hypixel.hytale.component.ComponentAccessor;
-import com.hypixel.hytale.component.ComponentType;
-import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
+import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
 import dev.byt3.bloodmagic.codec.BloodLinkSource;
+import dev.byt3.bloodmagic.codec.BloodMagicConfig;
 import it.unimi.dsi.fastutil.Pair;
 
 import javax.annotation.Nullable;
@@ -66,6 +66,10 @@ public class BloodLinkMaster implements Component<EntityStore> {
     public BloodLinkMaster(UUID masterEntity, Set<UUID> linkedEntities) {
         this.linkedEntities = linkedEntities;
         this.masterEntity = masterEntity;
+    }
+
+    public Set<UUID> getLinkedEntities() {
+        return Collections.unmodifiableSet(linkedEntities);
     }
 
     public void addLinkedEntity(Ref<EntityStore> entity, ComponentAccessor<EntityStore> store) {
@@ -141,6 +145,22 @@ public class BloodLinkMaster implements Component<EntityStore> {
      * @param includeMaster Whether to include the master entity in the damage calculation
      */
     public void applyDamage(Damage damage, ComponentAccessor<EntityStore> store, boolean includeMaster) {
+        BloodMagicConfig config = BloodMagicPlugin.get().config.get();
+
+        // Check if damage type is blacklisted
+        if (config.blacklistedDamageTypes.contains(damage.getDamageCauseIndex())) {
+            return;
+        }
+
+        // Check split threshold
+        // TODO: This threshold check should be against total health, as per config documentation
+        if (damage.getAmount() < config.splitThreshold) {
+            return;
+        }
+
+        // Apply damage reduction multiplier
+        float modifiedDamage = (float) (damage.getAmount() * config.damageReductionMultiplier);
+
         // Split the damage based on the percentage of health each linked entity has compared to the total health of all linked entities
         float totalHealth = 0;
 
@@ -161,6 +181,10 @@ public class BloodLinkMaster implements Component<EntityStore> {
         }
 
         for (var pair : cachedLinkedRefs) {
+            Ref<EntityStore> ref = pair.right();
+
+            // TODO Check distance
+
             EntityStatValue healthValue = pair.left().get(DefaultEntityStatTypes.getHealth());
             if (healthValue == null) continue;
             totalHealth += healthValue.get();
@@ -171,31 +195,78 @@ public class BloodLinkMaster implements Component<EntityStore> {
             return;
         }
 
-        float totalDamage = damage.getAmount();
+        float totalDamage = modifiedDamage;
         BloodLinkSource source = new BloodLinkSource(getRef(store), damage.getSource());
+
+        // TODO: Implement other SplitModes (PERCENTAGE_COUNT, SEQUENTIAL, FLAT) based on config.damageSplitMode
+        // Currently only implementing PERCENTAGE_TOTAL
 
         // Apply proportional damage to each linked entity
         for (var pair : cachedLinkedRefs) {
             EntityStatMap statMap = pair.left();
             Ref<EntityStore> ref = pair.right();
+
+            // TODO Check distance again (or optimize to not calculate twice?
+
             EntityStatValue healthValue = statMap.get(DefaultEntityStatTypes.getHealth());
             if (healthValue == null) continue;
-            float healthPercent = healthValue.get() / totalHealth;
-            float damageToApply = totalDamage * healthPercent;
+
+            float damageToApply;
+            if (config.damageSplitMode == BloodMagicConfig.DamageSplitMode.PERCENTAGE_TOTAL) {
+                float healthPercent = healthValue.get() / totalHealth;
+                damageToApply = totalDamage * healthPercent;
+            } else {
+                // Fallback or TODO for other modes
+                // For now defaulting to PERCENTAGE_TOTAL logic as placeholder for other modes to ensure compilation/running
+                float healthPercent = healthValue.get() / totalHealth;
+                damageToApply = totalDamage * healthPercent;
+            }
+
+            if (config.preventLethalDamageToLinked) {
+                float currentHealth = healthValue.get();
+                if (damageToApply >= currentHealth) {
+                    damageToApply = Math.max(0, currentHealth - 1); // Reduce damage to leave at least 1 health
+                }
+            }
+
             // Directly apply damage via invoke so the engine processes it
             // but the damage system will recognize it and not re-split
             Damage splitDamage = new Damage(source, damage.getDamageCauseIndex(), damageToApply);
             store.invoke(ref, splitDamage);
-            HytaleLogger.getLogger().atInfo().log("Applying %f damage to linked entity %d (Health: %f, Percent: %f%%)", damageToApply, ref.getIndex(), healthValue.get(), healthPercent * 100);
+
+            if (config.showDamageNumbers) {
+                // TODO: Show floating damage numbers
+            }
+
+            if (config.debugMode) {
+                HytaleLogger.getLogger().atInfo().log("Applying %f damage to linked entity %d (Health: %f)", damageToApply, ref.getIndex(), healthValue.get());
+            }
         }
 
         // Apply proportional damage to the master entity if included
         if (includeMaster) {
-            float masterHealthPercent = masterHealthValue.get() / totalHealth;
-            float masterDamageToApply = totalDamage * masterHealthPercent;
+            float masterDamageToApply;
+            if (config.damageSplitMode == BloodMagicConfig.DamageSplitMode.PERCENTAGE_TOTAL) {
+                float masterHealthPercent = masterHealthValue.get() / totalHealth;
+                masterDamageToApply = totalDamage * masterHealthPercent;
+            } else {
+                // Fallback
+                float masterHealthPercent = masterHealthValue.get() / totalHealth;
+                masterDamageToApply = totalDamage * masterHealthPercent;
+            }
+
+            masterDamageToApply *= (float) config.masterDamageMultiplier;
+
             Damage masterDamage = new Damage(source, damage.getDamageCauseIndex(), masterDamageToApply);
             store.invoke(getRef(store), masterDamage);
-            HytaleLogger.getLogger().atInfo().log("Applying %f damage to master entity %d (Health: %f, Percent: %f%%)", masterDamageToApply, getRef(store).getIndex(), masterHealthValue.get(), masterHealthPercent * 100);
+
+            if (config.showDamageNumbers) {
+                // TODO: Show floating damage numbers
+            }
+
+            if (config.debugMode) {
+                HytaleLogger.getLogger().atInfo().log("Applying %f damage to master entity %d (Health: %f)", masterDamageToApply, getRef(store).getIndex(), masterHealthValue.get());
+            }
         }
     }
 
@@ -218,5 +289,29 @@ public class BloodLinkMaster implements Component<EntityStore> {
                 cachedLinkedRefs.add(Pair.of(masterStatMap, getRef(store)));
             }
         }
+    }
+
+    public static Damage getDamageForLethalKill(Ref<EntityStore> ref) {
+        return new Damage(new BloodLinkSource(ref, null), DamageCause.getAssetMap().getIndex("BloodLinkSever"), Float.MAX_VALUE);
+    }
+
+    public void killLinkedEntities(CommandBuffer<EntityStore> store) {
+        Damage lethalDamage = getDamageForLethalKill(getRef(store));
+        if (isCacheValid(store)) {
+            for (var pair : cachedLinkedRefs) {
+                DeathComponent.tryAddComponent(store, pair.right(), lethalDamage);
+            }
+            return;
+        }
+
+        for (UUID linkedEntity : linkedEntities) {
+            Ref<EntityStore> entityRef = store.getExternalData().getRefFromUUID(linkedEntity);
+            if (entityRef == null) {
+                HytaleLogger.getLogger().atWarning().log("Linked entity with UUID " + linkedEntity + " not found, cannot apply lethal damage.");
+                continue;
+            }
+            DeathComponent.tryAddComponent(store, entityRef, lethalDamage);
+        }
+
     }
 }
