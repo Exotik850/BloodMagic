@@ -17,7 +17,6 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.byt3.bloodmagic.BloodMagicPlugin;
 import dev.byt3.bloodmagic.codec.BloodLinkSource;
 import dev.byt3.bloodmagic.codec.BloodMagicConfig;
-import it.unimi.dsi.fastutil.Pair;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -37,10 +36,18 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     private UUID masterEntity; // The entity that is the master of this link
     private Set<UUID> linkedEntities = new HashSet<>(); // Set of entities linked to this master
-    private final List<Pair<EntityStatMap, Ref<EntityStore>>> cachedLinkedRefs = new ArrayList<>(); // Cached refs of linked entities for quick access
+
+    // Cached data for linked entities - Map for O(1) lookup by UUID
+    private final Map<UUID, CachedEntityData> cachedLinkedData = new HashMap<>();
 
     @Nullable
     private Ref<EntityStore> entityRef;
+
+    /**
+     * Holds cached reference data for a linked entity.
+     */
+    private record CachedEntityData(EntityStatMap statMap, Ref<EntityStore> ref) {
+    }
 
     private BloodLinkMaster() {
     }
@@ -53,7 +60,7 @@ public class BloodLinkMaster implements Component<EntityStore> {
             }
         }
         linkedEntities.clear();
-        cachedLinkedRefs.clear();
+        cachedLinkedData.clear();
     }
 
     private Ref<EntityStore> getRef(ComponentAccessor<EntityStore> store) {
@@ -74,25 +81,23 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     public void addLinkedEntity(Ref<EntityStore> entity, ComponentAccessor<EntityStore> store) {
         UUIDComponent uuidComponent = store.getComponent(entity, UUIDComponent.getComponentType());
+        UUID entityUuid = uuidComponent.getUuid();
         store.putComponent(entity, BloodLink.getComponentType(), new BloodLink(masterEntity));
-        linkedEntities.add(uuidComponent.getUuid());
-        HytaleLogger.getLogger().atInfo().log("Linked entity " + entity.getIndex() + " to master " + getRef(store).getIndex());
-        if (!cachedLinkedRefs.isEmpty()) {
-            cachedLinkedRefs.add(Pair.of(store.getComponent(entity, EntityStatMap.getComponentType()), entity));
-        }
-    }
+        linkedEntities.add(entityUuid);
 
-    public boolean isCacheValid(ComponentAccessor<EntityStore> store) {
-        return cachedLinkedRefs.size() == linkedEntities.size() && cachedLinkedRefs.stream().allMatch(pair -> {
-            UUIDComponent uuidComponent = store.getComponent(pair.right(), UUIDComponent.getComponentType());
-            return uuidComponent != null && linkedEntities.contains(uuidComponent.getUuid());
-        });
+        // Always cache the entity data for efficient access
+        EntityStatMap statMap = store.getComponent(entity, EntityStatMap.getComponentType());
+        if (statMap != null) {
+            cachedLinkedData.put(entityUuid, new CachedEntityData(statMap, entity));
+        }
+
+        HytaleLogger.getLogger().atInfo().log("Linked entity " + entity.getIndex() + " to master " + getRef(store).getIndex());
     }
 
     public float getTotalLinkedHealth() {
         float totalHealth = 0;
-        for (var pair : cachedLinkedRefs) {
-            EntityStatValue healthValue = pair.left().get(DefaultEntityStatTypes.getHealth());
+        for (CachedEntityData data : cachedLinkedData.values()) {
+            EntityStatValue healthValue = data.statMap().get(DefaultEntityStatTypes.getHealth());
             if (healthValue != null) {
                 totalHealth += healthValue.get();
             }
@@ -112,19 +117,30 @@ public class BloodLinkMaster implements Component<EntityStore> {
 
     public void removeEntity(Ref<EntityStore> target, ComponentAccessor<EntityStore> store) {
         UUIDComponent uuidComponent = store.getComponent(target, UUIDComponent.getComponentType());
+        UUID entityUuid = uuidComponent.getUuid();
 
-        if (!linkedEntities.contains(uuidComponent.getUuid())) {
+        if (!linkedEntities.contains(entityUuid)) {
             HytaleLogger.getLogger().atWarning().log("Tried to unlink entity that is not linked: " + target.getIndex());
             return;
         }
 
         store.removeComponent(target, BloodLink.getComponentType());
-        linkedEntities.remove(uuidComponent.getUuid());
-        if (!cachedLinkedRefs.isEmpty()) {
-            cachedLinkedRefs.removeIf(pair -> pair.right().equals(target));
-        }
+        linkedEntities.remove(entityUuid);
+        cachedLinkedData.remove(entityUuid);
 
         HytaleLogger.getLogger().atInfo().log("Unlinked entity " + target.getIndex() + " from master " + getRef(store).getIndex());
+    }
+
+    /**
+     * Removes a linked entity by UUID. Use this when the entity is no longer accessible
+     * (e.g., after death) but needs to be removed from the network.
+     *
+     * @param entityUuid The UUID of the entity to remove
+     */
+    public void removeEntityByUuid(UUID entityUuid) {
+        linkedEntities.remove(entityUuid);
+        cachedLinkedData.remove(entityUuid);
+        HytaleLogger.getLogger().atInfo().log("Removed entity " + entityUuid + " from blood link network");
     }
 
     /**
@@ -148,7 +164,7 @@ public class BloodLinkMaster implements Component<EntityStore> {
         BloodMagicConfig config = BloodMagicPlugin.get().config.get();
 
         // Check if damage type is blacklisted
-        if (config.blacklistedDamageTypes.contains(damage.getDamageCauseIndex())) {
+        if (config.blacklistedDamageTypes.contains(damage.getCause().getId())) {
             return;
         }
 
@@ -180,12 +196,10 @@ public class BloodLinkMaster implements Component<EntityStore> {
             totalHealth += masterHealthValue.get();
         }
 
-        for (var pair : cachedLinkedRefs) {
-            Ref<EntityStore> ref = pair.right();
-
+        for (CachedEntityData data : cachedLinkedData.values()) {
             // TODO Check distance
 
-            EntityStatValue healthValue = pair.left().get(DefaultEntityStatTypes.getHealth());
+            EntityStatValue healthValue = data.statMap().get(DefaultEntityStatTypes.getHealth());
             if (healthValue == null) continue;
             totalHealth += healthValue.get();
         }
@@ -202,9 +216,9 @@ public class BloodLinkMaster implements Component<EntityStore> {
         // Currently only implementing PERCENTAGE_TOTAL
 
         // Apply proportional damage to each linked entity
-        for (var pair : cachedLinkedRefs) {
-            EntityStatMap statMap = pair.left();
-            Ref<EntityStore> ref = pair.right();
+        for (CachedEntityData data : cachedLinkedData.values()) {
+            EntityStatMap statMap = data.statMap();
+            Ref<EntityStore> ref = data.ref();
 
             // TODO Check distance again (or optimize to not calculate twice?
 
@@ -270,48 +284,18 @@ public class BloodLinkMaster implements Component<EntityStore> {
         }
     }
 
-    public void revalidateCache(ComponentAccessor<EntityStore> store, boolean includeMaster) {
-        cachedLinkedRefs.clear();
-        for (UUID linkedEntity : linkedEntities) {
-            Ref<EntityStore> entityRef = store.getExternalData().getRefFromUUID(linkedEntity);
-            if (entityRef == null) {
-                HytaleLogger.getLogger().atWarning().log("Linked entity with UUID " + linkedEntity + " not found, skipping damage application.");
-                continue;
-            }
-            EntityStatMap statMap = store.getComponent(entityRef, EntityStatMap.getComponentType());
-            if (statMap == null) continue;
-            cachedLinkedRefs.add(Pair.of(statMap, entityRef));
-        }
-
-        if (includeMaster) {
-            EntityStatMap masterStatMap = store.getComponent(getRef(store), EntityStatMap.getComponentType());
-            if (masterStatMap != null) {
-                cachedLinkedRefs.add(Pair.of(masterStatMap, getRef(store)));
-            }
-        }
+    public static Damage getDamageForLethalKill(Ref<EntityStore> ref) {
+        return getDamageForLethalKill(ref, null);
     }
 
-    public static Damage getDamageForLethalKill(Ref<EntityStore> ref) {
-        return new Damage(new BloodLinkSource(ref, null), DamageCause.getAssetMap().getIndex("BloodLinkSever"), Float.MAX_VALUE);
+    public static Damage getDamageForLethalKill(Ref<EntityStore> ref, @Nullable Damage.Source originalSource) {
+        return new Damage(new BloodLinkSource(ref, originalSource), DamageCause.getAssetMap().getIndex("BloodLinkSever"), Float.MAX_VALUE);
     }
 
     public void killLinkedEntities(CommandBuffer<EntityStore> store) {
         Damage lethalDamage = getDamageForLethalKill(getRef(store));
-        if (isCacheValid(store)) {
-            for (var pair : cachedLinkedRefs) {
-                DeathComponent.tryAddComponent(store, pair.right(), lethalDamage);
-            }
-            return;
+        for (CachedEntityData data : cachedLinkedData.values()) {
+            DeathComponent.tryAddComponent(store, data.ref(), lethalDamage);
         }
-
-        for (UUID linkedEntity : linkedEntities) {
-            Ref<EntityStore> entityRef = store.getExternalData().getRefFromUUID(linkedEntity);
-            if (entityRef == null) {
-                HytaleLogger.getLogger().atWarning().log("Linked entity with UUID " + linkedEntity + " not found, cannot apply lethal damage.");
-                continue;
-            }
-            DeathComponent.tryAddComponent(store, entityRef, lethalDamage);
-        }
-
     }
 }

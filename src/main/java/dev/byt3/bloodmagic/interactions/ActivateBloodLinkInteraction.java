@@ -6,7 +6,6 @@ import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.logger.HytaleLogger;
-import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
@@ -85,13 +84,13 @@ public class ActivateBloodLinkInteraction extends SimpleInstantInteraction {
         }
         if (unlink) {
             masterComponent.removeEntity(targetEntity, store);
-        } else {
-             // Check max links
-            if (config.maxLinkedEntities != -1 && masterComponent.getLinkedEntities().size() >= config.maxLinkedEntities) {
-                 HytaleLogger.getLogger().atInfo().log("ActivateBloodLinkInteraction: Master has reached max linked entities.");
-                 return;
-            }
-            masterComponent.addLinkedEntity(targetEntity, store);
+            return;
         }
+        // Check max links
+        if (config.maxLinkedEntities != -1 && masterComponent.getLinkedEntities().size() >= config.maxLinkedEntities) {
+            HytaleLogger.getLogger().atInfo().log("ActivateBloodLinkInteraction: Master has reached max linked entities.");
+            return;
+        }
+        masterComponent.addLinkedEntity(targetEntity, store);
     }
 }

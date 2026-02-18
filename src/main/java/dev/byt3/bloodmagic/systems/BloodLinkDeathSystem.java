@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathSystems;
@@ -30,16 +31,27 @@ public class BloodLinkDeathSystem extends DeathSystems.OnDeathSystem {
             }
         }
 
+        BloodLink link = commandBuffer.getComponent(ref, BloodLink.getComponentType());
+        if (link == null) return;
+
+        // Get the UUID of the dying entity for removal from the master's cache
+        UUIDComponent uuidComponent = commandBuffer.getComponent(ref, UUIDComponent.getComponentType());
+
+        // The entity that died is a linked entity — remove from master's network
+        Ref<EntityStore> parentRef = commandBuffer.getExternalData().getRefFromUUID(link.getMasterUUID());
+        if (parentRef == null) return;
+
+        BloodLinkMaster parentMaster = commandBuffer.getComponent(parentRef, BloodLinkMaster.getComponentType());
+        if (parentMaster != null && uuidComponent != null) {
+            // Remove the dead entity from the master's cache
+            parentMaster.removeEntityByUuid(uuidComponent.getUuid());
+        }
+
         if (!config.killMasterOnLinkedEntityDeath) {
             // If we're not configured to kill the master when a linked entity dies, we can stop here.
             return;
         }
 
-        BloodLink link = commandBuffer.getComponent(ref, BloodLink.getComponentType());
-        if (link == null) return;
-        // The entity that died is a linked entity — kill the master as well
-        Ref<EntityStore> parentRef = commandBuffer.getExternalData().getRefFromUUID(link.getMasterUUID());
-        if (parentRef == null) return;
         Damage lethalDamage = BloodLinkMaster.getDamageForLethalKill(ref);
         DeathComponent.tryAddComponent(commandBuffer, parentRef, lethalDamage);
     }
